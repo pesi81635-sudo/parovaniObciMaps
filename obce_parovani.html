@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Párování obcí podle vzdálenosti</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff; --bg-secondary: #f5f5f3;
+    --text: #1a1a18; --text-secondary: #6b6b67; --text-tertiary: #9e9e9a;
+    --border: rgba(0,0,0,0.15); --border-secondary: rgba(0,0,0,0.25);
+    --success: #3b6d11; --danger: #a32d2d;
+    --warning-bg: #faeeda; --warning-text: #854f0b;
+    --radius: 8px; --radius-lg: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1e1e1c; --bg-secondary: #2a2a28;
+      --text: #f0eeea; --text-secondary: #a8a8a4; --text-tertiary: #6b6b67;
+      --border: rgba(255,255,255,0.15); --border-secondary: rgba(255,255,255,0.25);
+      --success: #97c459; --danger: #f09595;
+      --warning-bg: #412402; --warning-text: #fac775;
+    }
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg-secondary); color: var(--text); min-height: 100vh; padding: 2rem 1rem; }
+  .page { max-width: 640px; margin: 0 auto; background: var(--bg); border-radius: var(--radius-lg); border: 0.5px solid var(--border); padding: 2rem; }
+  h1 { font-size: 20px; font-weight: 500; margin-bottom: 0.25rem; }
+  .subtitle { font-size: 13px; color: var(--text-secondary); margin-bottom: 2rem; }
+  .section { margin-bottom: 1.5rem; }
+  label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+  input[type="password"], textarea {
+    width: 100%; padding: 9px 12px; border: 0.5px solid var(--border-secondary);
+    border-radius: var(--radius); background: var(--bg); color: var(--text);
+    font-size: 14px; font-family: inherit; outline: none; transition: border-color 0.15s;
+  }
+  input[type="password"] { font-family: monospace; }
+  input:focus, textarea:focus { border-color: var(--text-secondary); box-shadow: 0 0 0 2px rgba(0,0,0,0.07); }
+  textarea { min-height: 150px; resize: vertical; }
+  .key-row { display: flex; gap: 8px; }
+  .key-row input { flex: 1; }
+  .notice { font-size: 12px; color: var(--text-tertiary); margin-top: 5px; }
+  .hint { font-size: 12px; color: var(--text-tertiary); margin-top: 5px; line-height: 1.5; }
+  .btn-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 0.5rem; }
+  button { padding: 8px 18px; border: 0.5px solid var(--border-secondary); border-radius: var(--radius); background: transparent; color: var(--text); font-size: 14px; font-family: inherit; cursor: pointer; transition: background 0.12s; }
+  button:hover { background: var(--bg-secondary); }
+  button:disabled { opacity: 0.38; cursor: not-allowed; }
+  button.primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+  button.primary:hover { opacity: 0.82; }
+  .progress-wrap { height: 3px; background: var(--bg-secondary); border-radius: 3px; margin-top: 10px; overflow: hidden; display: none; }
+  .progress-bar { height: 3px; background: var(--text); width: 0%; transition: width 0.25s; }
+  .status { font-size: 13px; color: var(--text-secondary); margin-top: 8px; min-height: 18px; }
+  .status.error { color: var(--danger); }
+  .status.ok { color: var(--success); }
+  .cost-note { font-size: 12px; color: var(--text-tertiary); margin-top: 6px; min-height: 16px; }
+  .warning-box { background: var(--warning-bg); border-radius: var(--radius); padding: 10px 14px; margin-top: 1rem; font-size: 13px; color: var(--warning-text); line-height: 1.6; }
+  .warning-box strong { font-weight: 500; display: block; margin-bottom: 4px; }
+  #results { margin-top: 1.5rem; }
+  .section-title { font-size: 11px; font-weight: 500; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; margin: 1.25rem 0 8px; }
+  .pair-card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 11px 16px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .pair-index { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+  .pair-names { font-size: 15px; font-weight: 500; }
+  .pair-arrow { color: var(--text-tertiary); padding: 0 4px; }
+  .pair-detail { font-size: 13px; color: var(--text-secondary); text-align: right; white-space: nowrap; line-height: 1.5; }
+  .pair-dist { font-size: 12px; color: var(--text-tertiary); }
+  .loner { background: var(--bg-secondary); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 8px 14px; font-size: 13px; color: var(--text-secondary); margin-top: 6px; }
+  .export-row { margin-top: 1.5rem; display: none; }
+  .geocode-list { margin-top: 8px; }
+  .geocode-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 3px 0; border-bottom: 0.5px solid var(--border); color: var(--text-secondary); }
+  .geocode-row:last-child { border-bottom: none; }
+  .badge { font-size: 11px; padding: 2px 7px; border-radius: 4px; font-weight: 500; }
+  .badge.ok { background: #eaf3de; color: #3b6d11; }
+  .badge.err { background: #fcebeb; color: #a32d2d; }
+  @media (prefers-color-scheme: dark) {
+    .badge.ok { background: #27500a; color: #c0dd97; }
+    .badge.err { background: #501313; color: #f7c1c1; }
+  }
+  details { margin-top: 1rem; }
+  summary { font-size: 12px; color: var(--text-tertiary); cursor: pointer; user-select: none; }
+  summary:hover { color: var(--text-secondary); }
+  .debug-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+  .debug-table th { text-align: left; color: var(--text-tertiary); font-weight: 500; padding: 4px 8px; border-bottom: 0.5px solid var(--border); }
+  .debug-table td { padding: 4px 8px; border-bottom: 0.5px solid var(--border); color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Párování obcí</h1>
+  <p class="subtitle">Najde vždy dvě k sobě nejbližší obce podle doby jízdy autem.</p>
+
+  <div class="section">
+    <label>Google Maps API klíč</label>
+    <div class="key-row">
+      <input type="password" id="api-key" placeholder="AIza..." autocomplete="off" spellcheck="false" />
+      <button onclick="document.getElementById('api-key').value=''">Smazat</button>
+    </div>
+    <p class="notice">Klíč zůstává pouze v paměti stránky — nikam se neukládá ani neposílá jinam než na maps.googleapis.com.</p>
+  </div>
+
+  <div class="section">
+    <label>Seznam obcí <span style="color:var(--text-tertiary)">(každá na novém řádku)</span></label>
+    <textarea id="obce-input" oninput="updateCostEstimate()"
+      placeholder="Davle&#10;Liteň&#10;Mšeno, okres Mělník&#10;Tuchlovice&#10;Kácov&#10;Neveklov"></textarea>
+    <p class="hint">Pokud je obec nejednoznačná, upřesněte ji — např. <em>Mšeno, okres Mělník</em></p>
+    <div class="cost-note" id="cost-note"></div>
+  </div>
+
+  <div class="btn-row">
+    <button class="primary" id="run-btn" onclick="initAndRun()">Spárovat obce</button>
+    <button onclick="clearAll()">Vymazat vše</button>
+  </div>
+
+  <div class="progress-wrap" id="progress-wrap"><div class="progress-bar" id="progress-bar"></div></div>
+  <div class="status" id="status"></div>
+  <div id="warnings"></div>
+  <div id="results"></div>
+  <div class="export-row" id="export-row">
+    <button onclick="exportCSV()">Stáhnout výsledky jako CSV</button>
+  </div>
+</div>
+
+<script>
+let lastPairs = [], lastObce = [], sdkLoaded = false;
+
+function updateCostEstimate() {
+  const raw = document.getElementById('obce-input').value.trim();
+  const note = document.getElementById('cost-note');
+  if (!raw) { note.textContent = ''; return; }
+  const n = raw.split('\n').map(s => s.trim()).filter(Boolean).length;
+  if (n < 2) { note.textContent = ''; return; }
+  const elements = n * (n - 1) / 2;
+  const costUSD = elements * 0.005;
+  note.textContent = `${n} obcí → ${elements} dotazů (~$${costUSD.toFixed(2)}) ${costUSD <= 200 ? '— pokryto free kreditem' : '— překračuje $200/měsíc'}`;
+}
+
+function setStatus(msg, type) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status' + (type ? ' ' + type : '');
+}
+
+function setProgress(pct) {
+  const wrap = document.getElementById('progress-wrap'), bar = document.getElementById('progress-bar');
+  if (pct <= 0 || pct >= 100) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  bar.style.width = pct + '%';
+}
+
+function clearAll() {
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('warnings').innerHTML = '';
+  document.getElementById('export-row').style.display = 'none';
+  setStatus(''); setProgress(0);
+  lastPairs = []; lastObce = [];
+}
+
+function loadSDK(apiKey) {
+  return new Promise((resolve, reject) => {
+    if (sdkLoaded && window.google?.maps?.DistanceMatrixService) { resolve(); return; }
+    document.getElementById('gmaps-sdk')?.remove();
+    window.__mapsCallback = () => { sdkLoaded = true; resolve(); };
+    const s = document.createElement('script');
+    s.id = 'gmaps-sdk';
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&callback=__mapsCallback&language=cs`;
+    s.async = true;
+    s.onerror = () => reject(new Error('Nepodařilo se načíst Google Maps SDK. Zkontrolujte API klíč a povolení Maps JavaScript API.'));
+    document.head.appendChild(s);
+  });
+}
+
+// Geocoding — vrátí formatted_address (string) nebo null
+function geocodePlace(geocoder, name) {
+  return new Promise(resolve => {
+    geocoder.geocode(
+      { address: name + ', Česká republika', region: 'CZ' },
+      (results, status) => {
+        if (status === 'OK' && results[0]) {
+          resolve(results[0].formatted_address);
+        } else {
+          resolve(null);
+        }
+      }
+    );
+  });
+}
+
+// Distance Matrix s textovými adresami
+function getDistanceBatch(service, originAddr, destAddrs) {
+  return new Promise(resolve => {
+    service.getDistanceMatrix({
+      origins: [originAddr],
+      destinations: destAddrs,
+      travelMode: google.maps.TravelMode.DRIVING,
+      unitSystem: google.maps.UnitSystem.METRIC,
+      language: 'cs',
+      region: 'CZ'
+    }, (response, status) => {
+      if (status === 'OK') resolve(response);
+      else { console.warn('DistanceMatrix error:', status); resolve(null); }
+    });
+  });
+}
+
+async function initAndRun() {
+  const apiKey = document.getElementById('api-key').value.trim();
+  const raw = document.getElementById('obce-input').value.trim();
+  if (!apiKey) { setStatus('Zadejte API klíč.', 'error'); return; }
+  if (!raw) { setStatus('Zadejte seznam obcí.', 'error'); return; }
+
+  const obce = raw.split('\n').map(s => s.trim()).filter(Boolean);
+  if (obce.length < 2) { setStatus('Zadejte alespoň 2 obce.', 'error'); return; }
+
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  clearAll();
+
+  setStatus('Načítám Google Maps SDK…');
+  try { await loadSDK(apiKey); }
+  catch(e) { setStatus(e.message, 'error'); btn.disabled = false; return; }
+
+  const n = obce.length;
+  const geocoder = new google.maps.Geocoder();
+  const service = new google.maps.DistanceMatrixService();
+
+  // Krok 1: Geocoding — získáme formatted_address pro každou obec
+  setStatus('Ověřuji obce…');
+  const geocodeResults = [];  // { input, address, ok }
+
+  for (let i = 0; i < n; i++) {
+    const addr = await geocodePlace(geocoder, obce[i]);
+    geocodeResults.push({ input: obce[i], address: addr, ok: !!addr });
+    setProgress(Math.round((i + 1) / n * 40));
+    await new Promise(res => setTimeout(res, 120));
+  }
+
+  // Zobraz geocoding výsledky
+  const failed = geocodeResults.filter(r => !r.ok);
+  renderGeocodeResults(geocodeResults, failed);
+
+  const valid = geocodeResults.filter(r => r.ok);
+  const m = valid.length;
+
+  if (m < 2) {
+    setStatus('Méně než 2 obce nalezeny — nelze párovat.', 'error');
+    btn.disabled = false; setProgress(0); return;
+  }
+
+  // Krok 2: Distance Matrix — horní trojúhelník, předáváme formatted_address jako string
+  setStatus('Načítám vzdálenosti…');
+  const dist = Array.from({ length: m }, () => new Array(m).fill(null));
+  const debugLog = [];
+  const totalRows = m - 1;
+  let doneRows = 0;
+
+  for (let i = 0; i < m - 1; i++) {
+    const destIdxs = [], destAddrs = [];
+    for (let j = i + 1; j < m; j++) {
+      destIdxs.push(j);
+      destAddrs.push(valid[j].address);
+    }
+
+    const response = await getDistanceBatch(service, valid[i].address, destAddrs);
+
+    if (response?.rows?.[0]) {
+      const elements = response.rows[0].elements;
+      destIdxs.forEach((j, idx) => {
+        const el = elements[idx];
+        if (el?.status === 'OK') {
+          const r = {
+            duration: el.duration.value, distance: el.distance.value,
+            durationText: el.duration.text, distanceText: el.distance.text
+          };
+          dist[i][j] = r; dist[j][i] = r;
+          debugLog.push({ a: valid[i].input, b: valid[j].input, ok: true, dur: el.duration.text, dist: el.distance.text });
+        } else {
+          debugLog.push({ a: valid[i].input, b: valid[j].input, ok: false, status: el?.status || 'NULL' });
+        }
+      });
+    } else {
+      destIdxs.forEach(j => {
+        debugLog.push({ a: valid[i].input, b: valid[j].input, ok: false, status: 'NO_RESPONSE' });
+      });
+    }
+
+    doneRows++;
+    setProgress(40 + Math.round(doneRows / totalRows * 55));
+    setStatus(`Načítám vzdálenosti… (${doneRows} / ${totalRows})`);
+    await new Promise(res => setTimeout(res, 150));
+  }
+
+  // Krok 3: Greedy párování
+  setStatus('Párování…');
+  const used = new Array(m).fill(false);
+  const pairs = [];
+
+  while (true) {
+    let best = null;
+    for (let i = 0; i < m; i++) {
+      if (used[i]) continue;
+      for (let j = i + 1; j < m; j++) {
+        if (used[j]) continue;
+        const d = dist[i][j];
+        if (!d) continue;
+        if (!best || d.duration < best.duration) best = { i, j, ...d };
+      }
+    }
+    if (!best) break;
+    pairs.push(best);
+    used[best.i] = true; used[best.j] = true;
+  }
+
+  const loners = [];
+  for (let i = 0; i < m; i++) if (!used[i]) loners.push(valid[i].input);
+
+  lastPairs = pairs;
+  lastObce = valid.map(v => v.input);
+
+  renderResults(pairs, loners, lastObce);
+
+  const errCount = debugLog.filter(d => !d.ok).length;
+  if (errCount > 0) renderDebug(debugLog);
+
+  const msg = `Hotovo — ${pairs.length} párů nalezeno.${errCount > 0 ? ` (${errCount} dvojic selhalo)` : ''}`;
+  setStatus(msg, pairs.length > 0 ? 'ok' : '');
+  setProgress(0);
+  btn.disabled = false;
+  if (pairs.length) document.getElementById('export-row').style.display = 'block';
+}
+
+function renderGeocodeResults(results, failed) {
+  if (!failed.length) return;
+  const warnEl = document.getElementById('warnings');
+  let html = `<div class="warning-box">
+    <strong>Tyto obce se nepodařilo najít:</strong>
+    <div class="geocode-list">`;
+  results.forEach(r => {
+    html += `<div class="geocode-row">
+      <span>${esc(r.input)}</span>
+      ${r.ok
+        ? `<span class="badge ok">nalezeno: ${esc(r.address.split(',')[0])}</span>`
+        : `<span class="badge err">nenalezeno</span>`}
+    </div>`;
+  });
+  html += `</div>
+    <span style="display:block;margin-top:8px;font-size:12px;">Upřesněte název, např. <em>Mšeno, okres Mělník</em> nebo <em>Čím, Příbram</em></span>
+  </div>`;
+  warnEl.innerHTML = html;
+}
+
+function renderResults(pairs, loners, obce) {
+  const el = document.getElementById('results');
+  if (!pairs.length) {
+    el.innerHTML = '<p style="font-size:13px;color:var(--text-secondary);margin-top:1rem;">Žádné páry nebylo možné sestavit.</p>';
+    return;
+  }
+  let html = `<div class="section-title">Výsledné páry (${pairs.length})</div>`;
+  pairs.forEach((p, idx) => {
+    html += `<div class="pair-card">
+      <div>
+        <div class="pair-names">${esc(obce[p.i])} <span class="pair-arrow">↔</span> ${esc(obce[p.j])}</div>
+        <div class="pair-index">#${idx + 1}</div>
+      </div>
+      <div class="pair-detail">${esc(p.durationText)}<div class="pair-dist">${esc(p.distanceText)}</div></div>
+    </div>`;
+  });
+  if (loners.length) {
+    html += '<div class="section-title" style="margin-top:1.25rem;">Nepárovaná obec</div>';
+    loners.forEach(l => { html += `<div class="loner">${esc(l)}</div>`; });
+  }
+  el.innerHTML = html;
+}
+
+function renderDebug(log) {
+  const errors = log.filter(d => !d.ok);
+  if (!errors.length) return;
+  let html = `<details style="margin-top:1rem;">
+    <summary>Detail chyb při načítání vzdáleností (${errors.length} dvojic)</summary>
+    <table class="debug-table" style="margin-top:8px;">
+      <tr><th>Obec A</th><th>Obec B</th><th>Stav</th></tr>`;
+  errors.forEach(r => {
+    html += `<tr><td>${esc(r.a)}</td><td>${esc(r.b)}</td><td style="color:var(--danger)">${esc(r.status || 'chyba')}</td></tr>`;
+  });
+  html += `</table></details>`;
+  document.getElementById('results').insertAdjacentHTML('beforeend', html);
+}
+
+function esc(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function exportCSV() {
+  if (!lastPairs.length) return;
+  const rows = [['#','Obec A','Obec B','Doba jízdy','Vzdálenost']];
+  lastPairs.forEach((p, i) => rows.push([i+1, lastObce[p.i], lastObce[p.j], p.durationText, p.distanceText]));
+  const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(',')).join('\r\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'parovani_obci.csv'; a.click();
+}
+</script>
+</body>
+</html>
